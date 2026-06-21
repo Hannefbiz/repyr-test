@@ -2,17 +2,23 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || '', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
+// Force dynamic execution to prevent Vercel build compilation traps
+export const dynamic = 'force-dynamic';
 
-export async function POST(req) {
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co', 
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder'
+);
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || 'placeholder' });
+
+export async function POST(request) {
   try {
-    const body = await req.json();
+    const body = await request.json();
 
     if (body.action === 'init') {
       const { data, error } = await supabase
         .from('diagnostic_sessions')
-        .insert([{ car_year: body.year, car_make: body.make, car_model: body.model }])
+        .insert([{ car_year: parseInt(body.year), car_make: body.make, car_model: body.model }])
         .select();
       
       if (error) throw error;
@@ -20,7 +26,7 @@ export async function POST(req) {
     }
 
     if (body.action === 'chat') {
-      const formattedHistory = body.history.map(msg => ({
+      const formattedHistory = (body.history || []).map(msg => ({
         role: msg.role === 'assistant' ? 'assistant' : 'user',
         content: msg.text
       }));
@@ -47,6 +53,8 @@ export async function POST(req) {
 
       return NextResponse.json({ reply });
     }
+    
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
